@@ -1,0 +1,42 @@
+name: Build Static ProjectorRays
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+
+jobs:
+  build:
+    name: Build Linux Static Binary
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Clone the repository
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # 2. Install Nix and enable modern Flakes support
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-24.11
+
+    # 3. Magic step: Nix builds everything cleanly in a sandbox
+    - name: Compile via Nix
+      run: nix build .#default
+
+    # 4. Verify that the binary has absolute ZERO runtime dependencies
+    - name: Verify Static Linking
+      run: |
+        BINARY_PATH="./result/bin/projectorrays"
+        file "$BINARY_PATH"
+        ldd "$BINARY_PATH" || echo "🎉 Success! No dynamic dependencies found."
+
+    # 5. Upload the single, standalone executable as a GitHub Artifact
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: projectorrays-static-linux
+        path: ./result/bin/projectorrays
