@@ -2,15 +2,19 @@ name: Build Static ProjectorRays
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "main" ]
+    tags:
+      - 'v*' # 🌟 ADD THIS: Allows the workflow to see version tags like v0.1.0
   pull_request:
-    branches: [ "master" ]
-  workflow_dispatch: # Allows manual trigger from the GitHub Actions UI
+    branches: [ "master", "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build Linux Static Binary
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Grants GitHub permission to create releases
 
     steps:
     # 1. Clone the repository
@@ -34,9 +38,27 @@ jobs:
         file "$BINARY_PATH"
         ldd "$BINARY_PATH" || echo "🎉 Success! No dynamic dependencies found."
 
-    # 5. Upload the single, standalone executable as a GitHub Artifact
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
+    # 5. 🌟 NEW STEP: Package the binary into a clean tarball and calculate hashes
+    - name: Package Asset
+      run: |
+        mkdir -p dist
+        cp ./result/bin/projectorrays ./dist/
+        cd dist
+        tar -czf projectorrays-linux.tar.gz projectorrays
+        
+        echo "=================================================="
+        echo "📋 COPY THIS DATA FOR YOUR HOMEBREW FORMULA:"
+        echo "=================================================="
+        echo "URL: https://github.com{{ github.repository }}/releases/download/${{ github.ref_name }}/projectorrays-linux.tar.gz"
+        echo "SHA256:"
+        sha256sum projectorrays-linux.tar.gz | awk '{print $1}'
+        echo "=================================================="
+
+    # 6. 🌟 NEW STEP: Upload to GitHub Releases ONLY when a tag is pushed
+    - name: Upload to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/') # 👈 Guard rail: Ensures this only runs for tags
       with:
-        name: projectorrays-static-linux
-        path: ./result/bin/projectorrays
+        files: dist/projectorrays-linux.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
