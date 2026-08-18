@@ -9,20 +9,20 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        # 🌟 FIX: Inject the mpg123 modification cleanly inside the global Nix config context
-        pkgs = import nixpkgs {
-          inherit system;
-          config = {
-            packageOverrides = super: {
-              mpg123 = super.mpg123.override {
-                withAudioModules = false;
-              };
-            };
-          };
-        };
-
-        # This now extracts a perfectly configured, non-breaking static package set
+        pkgs = import nixpkgs { inherit system; };
         staticPkgs = pkgs.pkgsStatic;
+
+        # 🌟 FIX: Manually strip out audio output modules by passing flags
+        # directly to mpg123's configure script, avoiding function argument errors.
+        mpg123StaticConfigured = staticPkgs.mpg123.overrideAttrs (oldAttrs: {
+          configureFlags = (oldAttrs.configureFlags or []) ++ [
+            "--with-audio=dummy"          # Completely drops live sound server drivers
+            "--disable-lfs-alias"
+          ];
+          # Strip out dependencies that fail on static musl evaluation
+          buildInputs = []; 
+          propagatedBuildInputs = [];
+        });
       in
       {
         packages.default = staticPkgs.stdenv.mkDerivation {
@@ -38,7 +38,7 @@
           
           buildInputs = with staticPkgs; [ 
             boost
-            mpg123 # 🌟 Automatically evaluates with audio modules disabled!
+            mpg123StaticConfigured # Use our explicitly modified decoder
             zlib 
           ];
 
