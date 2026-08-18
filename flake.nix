@@ -32,7 +32,8 @@
           nativeBuildInputs = with staticPkgs; [ 
             gnumake 
             pkg-config
-            pkgs.git # 🌟 FIX 1: Provide native host git to resolve the Makefile version check
+            pkgs.git
+            staticPkgs.xxd # 🌟 FIX: Inject the tool needed to process fontmap hex grids!
           ];
           
           buildInputs = with staticPkgs; [ 
@@ -41,19 +42,17 @@
             zlib 
           ];
 
-          # 🌟 FIX 2: Force include '-Isrc' so the compiler can locate local headers like 'director/castmember.h'
+          # Force include '-Isrc' so the compiler can locate local headers
           NIX_CFLAGS_COMPILE = [ "-static" "-Isrc" ];
           NIX_LDFLAGS = [ "-static" ];
 
-          # Pass the flags directly to Make as well
           makeFlags = [
             "LDFLAGS=-static"
-            "CXXFLAGS=-static -Isrc" # 🌟 FIX 2 (Backup): Inject source paths into Make rules
+            "CXXFLAGS=-static -Isrc"
           ];
 
           installPhase = ''
             mkdir -p $out/bin
-            # The Makefile outputs a file named 'projectorrays' in the root directory
             cp projectorrays $out/bin/
           '';
         };
