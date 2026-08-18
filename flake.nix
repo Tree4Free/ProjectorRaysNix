@@ -9,14 +9,20 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
-        staticPkgs = pkgs.pkgsStatic;
-
-        # 🌟 FIX: Override mpg123 to disable live audio servers (PulseAudio/ALSA) 
-        # which cannot be built statically on musl. ProjectorRays only needs decoding.
-        mpg123StaticConfigured = staticPkgs.mpg123.override {
-          withAudioModules = false;
+        # 🌟 FIX: Inject the mpg123 modification cleanly inside the global Nix config context
+        pkgs = import nixpkgs {
+          inherit system;
+          config = {
+            packageOverrides = super: {
+              mpg123 = super.mpg123.override {
+                withAudioModules = false;
+              };
+            };
+          };
         };
+
+        # This now extracts a perfectly configured, non-breaking static package set
+        staticPkgs = pkgs.pkgsStatic;
       in
       {
         packages.default = staticPkgs.stdenv.mkDerivation {
@@ -32,7 +38,7 @@
           
           buildInputs = with staticPkgs; [ 
             boost
-            mpg123StaticConfigured # 🌟 Use our customized, stripped-down audio decoder
+            mpg123 # 🌟 Automatically evaluates with audio modules disabled!
             zlib 
           ];
 
