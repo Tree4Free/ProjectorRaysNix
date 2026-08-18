@@ -12,14 +12,12 @@
         pkgs = import nixpkgs { inherit system; };
         staticPkgs = pkgs.pkgsStatic;
 
-        # 🌟 FIX: Manually strip out audio output modules by passing flags
-        # directly to mpg123's configure script, avoiding function argument errors.
+        # Strip audio output modules directly from the configure engine
         mpg123StaticConfigured = staticPkgs.mpg123.overrideAttrs (oldAttrs: {
           configureFlags = (oldAttrs.configureFlags or []) ++ [
-            "--with-audio=dummy"          # Completely drops live sound server drivers
+            "--with-audio=dummy"
             "--disable-lfs-alias"
           ];
-          # Strip out dependencies that fail on static musl evaluation
           buildInputs = []; 
           propagatedBuildInputs = [];
         });
@@ -33,22 +31,29 @@
 
           nativeBuildInputs = with staticPkgs; [ 
             gnumake 
-            pkg-config 
+            pkg-config
+            pkgs.git # 🌟 FIX 1: Provide native host git to resolve the Makefile version check
           ];
           
           buildInputs = with staticPkgs; [ 
             boost
-            mpg123StaticConfigured # Use our explicitly modified decoder
+            mpg123StaticConfigured
             zlib 
           ];
 
+          # 🌟 FIX 2: Force include '-Isrc' so the compiler can locate local headers like 'director/castmember.h'
+          NIX_CFLAGS_COMPILE = [ "-static" "-Isrc" ];
+          NIX_LDFLAGS = [ "-static" ];
+
+          # Pass the flags directly to Make as well
           makeFlags = [
             "LDFLAGS=-static"
-            "CXXFLAGS=-static"
+            "CXXFLAGS=-static -Isrc" # 🌟 FIX 2 (Backup): Inject source paths into Make rules
           ];
 
           installPhase = ''
             mkdir -p $out/bin
+            # The Makefile outputs a file named 'projectorrays' in the root directory
             cp projectorrays $out/bin/
           '';
         };
